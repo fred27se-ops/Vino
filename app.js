@@ -631,7 +631,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 11</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 12</p>
     </section>`;
 
   document.getElementById('form-gemini').onsubmit = async (e) => {

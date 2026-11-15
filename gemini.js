@@ -27,7 +27,7 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
   async function appel(chemin, cle, options = {}) {
     let rep;
     try {
-      rep = await fetch(`${BASE}/${chemin}`, { ...options, signal: AbortSignal.timeout(options.body ? 30000 : 15000), headers: { 'x-goog-api-key': cle, 'Content-Type': 'application/json' } });
+      rep = await fetch(`${BASE}/${chemin}`, { ...options, signal: AbortSignal.timeout(options.body ? 45000 : 15000), headers: { 'x-goog-api-key': cle, 'Content-Type': 'application/json' } });
     } catch (err) {
       const delai = !!err && err.name === 'TimeoutError';
       const e = new Error(delai ? 'Gemini met trop de temps à répondre.' : 'Pas de connexion internet.');
