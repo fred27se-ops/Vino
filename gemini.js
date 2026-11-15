@@ -64,16 +64,20 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     return nom;
   }
 
-  async function generer(cle, parts, tentative = 0) {
+  async function generer(cle, parts, tentative = 0, sansReflexion = false) {
     const modele = await choisirModele(cle);
     try {
+      // Les modèles 2.5 « réfléchissent » longtemps par défaut : inutile pour lire une étiquette, on coupe.
+      const config = { responseMimeType: 'application/json', temperature: 0 };
+      if (/gemini-2\.5/.test(modele) && !sansReflexion) config.thinkingConfig = { thinkingBudget: 0 };
       return await appel(`models/${modele}:generateContent`, cle, {
         method: 'POST',
-        body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0 } }),
+        body: JSON.stringify({ contents: [{ parts }], generationConfig: config }),
       });
     } catch (e) {
+      if (e.status === 400 && !sansReflexion && /gemini-2\.5/.test(modele)) return generer(cle, parts, tentative, true);
       // Modèle retiré depuis le dernier choix : on en choisit un autre une seule fois.
-      if (e.status === 404 && !tentative) { await DB.del('reglages', 'modeleGemini'); return generer(cle, parts, 1); }
+      if (e.status === 404 && !tentative) { await DB.del('reglages', 'modeleGemini'); return generer(cle, parts, 1, sansReflexion); }
       throw e;
     }
   }

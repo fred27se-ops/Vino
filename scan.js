@@ -293,7 +293,7 @@ const SCAN = (() => {
     if (cle && typeof GEMINI !== 'undefined') {
       onProgres("Lecture de l'étiquette par Gemini…");
       try {
-        const g = await GEMINI.lireEtiquette(canvasReduit(img, 1600).toDataURL('image/jpeg', 0.85).split(',')[1], cle);
+        const g = await GEMINI.lireEtiquette(canvasReduit(img, 1280).toDataURL('image/jpeg', 0.8).split(',')[1], cle);
         return { fiche: g.fiche, photo, texte: g.lignes.join('\n'), lignes: g.lignes, moteur: 'gemini' };
       } catch (e) {
         if (e.definitif) throw e;
