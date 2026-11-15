@@ -608,7 +608,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 3</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 4</p>
     </section>`;
 
   document.getElementById('form-etagere').onsubmit = async (e) => {

@@ -219,7 +219,9 @@ const SCAN = (() => {
     } else doutes.add('millesime');
 
     // Degré et contenance.
-    const deg = texte.match(/(\d{1,2}(?:[.,]\d{1,2})?)\s*%/);
+    // Le degré n'est repris que s'il est écrit avec « vol » ou « alc » à côté : un simple « % » perdu dans le texte
+    // lu ne doit jamais donner un taux d'alcool. Il est souvent sur la contre-étiquette : alors on le laisse vide.
+    const deg = texte.match(/(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:%|°|degr[ée]s?)?\s*(?:vol|alc)/i) || texte.match(/(?:vol|alc)[a-z.]*\s*:?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%/i);
     if (deg) {
       const v = Number(deg[1].replace(',', '.'));
       if (v >= 7 && v <= 23) fiche.degre = v;

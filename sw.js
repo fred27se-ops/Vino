@@ -1,6 +1,6 @@
 // Service worker : permet d'ouvrir l'app sans réseau.
 // Changer VERSION à chaque mise en ligne pour que les téléphones récupèrent la nouvelle version.
-const VERSION = 'ap-vino-v4';
+const VERSION = 'ap-vino-v5';
 const FICHIERS = [
   './', 'index.html', 'styles.css', 'db.js', 'garde.js', 'app.js', 'appellations.js', 'scan.js', 'vendor/tesseract/tesseract.min.js', 'vendor/tesseract/worker.min.js',
   'vendor/tesseract/tesseract-core-lstm.wasm.js', 'vendor/tesseract/tesseract-core-simd-lstm.wasm.js', 'vendor/tesseract/lang/fra.traineddata.gz', 'manifest.webmanifest',
