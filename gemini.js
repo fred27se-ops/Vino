@@ -20,6 +20,10 @@ Réponds uniquement par un objet JSON avec exactement ces clés :
 - "lignes" (liste de textes) : les principales lignes de texte lues sur l'étiquette, dans l'ordre.
 Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une information : laisse le champ vide ou null.`;
 
+  // Modèles qui ont répondu « limite atteinte » : mis de côté une minute (la limite gratuite est de 5 lectures par minute et par modèle).
+  const satures = new Map();
+  const occupe = (nom) => (satures.get(nom) || 0) > Date.now();
+
   async function appel(chemin, cle, options = {}) {
     let rep;
     try {
@@ -45,7 +49,7 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     if (status === 400 && /api key/i.test(detail)) return 'Clé Gemini refusée. Vérifie-la dans les réglages.';
     if (status === 401 || status === 403) return "Clé Gemini refusée ou sans accès. Vérifie-la dans les réglages (ou ta région n'est pas autorisée).";
     if (status === 404) return 'Modèle Gemini introuvable.';
-    if (status === 429) return 'Limite gratuite de Gemini atteinte pour le moment. Réessaie plus tard.';
+    if (status === 429) return 'Limite gratuite de Gemini atteinte (5 lectures par minute et par modèle). Attends une minute puis réessaie.';
     if (status >= 500) return `Gemini est momentanément indisponible (${status}${detail ? ' : ' + detail.slice(0, 100) : ''}).`;
     return `Erreur Gemini (${status})${detail ? ' : ' + detail.slice(0, 120) : ''}.`;
   }
@@ -57,7 +61,7 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     if (dejaChoisi) return dejaChoisi;
     const { models = [] } = await appel('models?pageSize=200', cle);
     const utilisables = models.filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini-[\d.]+-flash/.test(m.name)
-      && !ecartes.includes(m.name.replace(/^models\//, '')) && !/lite|image|tts|live|audio|embedding|thinking|robotics|computer|exp|learnlm/.test(m.name));
+      && !ecartes.includes(m.name.replace(/^models\//, '')) && !occupe(m.name.replace(/^models\//, '')) && !/lite|image|tts|live|audio|embedding|thinking|robotics|computer|exp|learnlm/.test(m.name));
     const version = (m) => parseFloat(m.name.match(/gemini-([\d.]+)-flash/)[1]);
     const stable = (m) => !/preview|-\d{3}$|-\d{2}-\d{2}/.test(m.name);
     utilisables.sort((a, b) => (stable(b) - stable(a)) || (version(b) - version(a)));
@@ -86,6 +90,11 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     } catch (e) {
       if (e.status === 400 && !sansReflexion) return generer(cle, parts, tentative, true, essai);
       // Modèle retiré depuis le dernier choix : on en choisit un autre une seule fois.
+      if (e.status === 429 && tentative < 3) {
+        satures.set(modele, Date.now() + 60000);
+        await DB.del('reglages', 'modeleGemini');
+        try { return await generer(cle, parts, tentative + 1, false, essai); } catch (e2) { throw e2.status === 429 || /Aucun modèle/.test(e2.message) ? e : e2; }
+      }
       if ((e.status === 404 || (essai && (e.delai || e.status >= 500))) && tentative < 4) {
         const ecartes = (await DB.get('reglages', 'modelesEcartes'))?.valeur || [];
         await DB.put('reglages', { id: 'modelesEcartes', valeur: [...ecartes, modele] });
