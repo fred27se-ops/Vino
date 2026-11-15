@@ -387,7 +387,10 @@ async function ecranFormulaire(id) {
           <input type="file" id="in-photo" accept="image/*" capture="environment" hidden>
         </label>
         <img id="apercu-photo" class="photo-apercu" alt="" ${v?.photo ? `src="${v.photo}"` : 'hidden'}>
+        <div id="scan-mots" class="mots" hidden></div>
+        <details id="scan-texte" hidden><summary>Voir le texte lu sur l'étiquette</summary><pre class="texte-lu"></pre></details>
         <p class="note" id="scan-etat">${v ? '' : "L'app lit l'étiquette et pré-remplit la fiche ; tu vérifies avant d'enregistrer."}</p>
+        <p class="note" id="scan-aide" hidden>Un champ est faux ou vide ? Touche-le, puis touche le bon mot lu ci-dessus.</p>
       </section>
       <fieldset>
         <legend>Le vin</legend>
@@ -468,6 +471,28 @@ async function ecranFormulaire(id) {
 
   let photo = v?.photo || null;
   const etat = document.getElementById('scan-etat');
+  // Dernier champ touché : un mot lu touché ensuite est placé dedans.
+  let champCible = form.elements.domaine;
+  form.addEventListener('focusin', (e) => { if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) && e.target.name) champCible = e.target; });
+  const afficherTexteLu = (texte, lignes = []) => {
+    const bloc = document.getElementById('scan-texte');
+    bloc.hidden = !texte;
+    document.getElementById('scan-aide').hidden = !lignes.length;
+    bloc.querySelector('pre').textContent = texte || '';
+    const zone = document.getElementById('scan-mots');
+    zone.innerHTML = [...new Set(lignes)].map((l) => `<button type="button" class="mot">${esc(l)}</button>`).join('');
+    zone.hidden = !lignes.length;
+    zone.querySelectorAll('.mot').forEach((b) => {
+      b.addEventListener('pointerdown', (ev) => ev.preventDefault());
+      b.addEventListener('click', () => {
+        if (champCible.tagName === 'SELECT') return toast('Touche d\'abord un champ texte (domaine, appellation…)');
+        champCible.value = champCible.type === 'number' ? b.textContent.replace(/\D/g, '') : b.textContent;
+        champCible.classList.add('ia');
+        champCible.dispatchEvent(new Event('input', { bubbles: true }));
+        toast(`« ${b.textContent} » placé dans « ${champCible.closest('label')?.firstChild?.textContent?.trim() || 'le champ'} »`);
+      });
+    });
+  };
   document.getElementById('in-photo').addEventListener('change', async (e) => {
     const fichier = e.target.files[0];
     e.target.value = '';
@@ -478,8 +503,10 @@ async function ecranFormulaire(id) {
     form.querySelectorAll('.ia, .ia-doute').forEach((el) => el.classList.remove('ia', 'ia-doute'));
     etat.textContent = "Lecture de l'étiquette…";
     etat.className = 'note attente';
+    afficherTexteLu('');
     try {
       const res = await SCAN.lireEtiquette(fichier, (m) => (etat.textContent = m));
+      afficherTexteLu(res.texte, res.lignes);
       photo = res.photo;
       remplirDepuisScan(form, res.fiche);
       profilTouche = true;
@@ -494,6 +521,7 @@ async function ecranFormulaire(id) {
       try { photo = await SCAN.photoFiche(fichier); } catch {}
       etat.textContent = err.message;
       etat.className = 'note erreur';
+      afficherTexteLu(err.texte, err.lignes);
     }
   });
 

@@ -29,8 +29,8 @@ const SCAN = (() => {
     });
   }
 
-  function canvasReduit(img, taille) {
-    const ratio = Math.min(1, taille / Math.max(img.width, img.height));
+  function canvasReduit(img, taille, agrandir = false) {
+    const ratio = agrandir ? Math.min(3, taille / Math.max(img.width, img.height)) : Math.min(1, taille / Math.max(img.width, img.height));
     const c = document.createElement('canvas');
     c.width = Math.round(img.width * ratio);
     c.height = Math.round(img.height * ratio);
@@ -38,23 +38,51 @@ const SCAN = (() => {
     return c;
   }
 
-  // Niveaux de gris et contraste étiré : aide Tesseract sur les photos mal éclairées.
-  function preparer(img) {
-    const c = canvasReduit(img, TAILLE_LECTURE);
+  // Prépare la photo pour la lecture : niveaux de gris, avec ou sans correction locale du contraste
+  // (utile pour les petites lettres et les ombres, mais elle abîme les très gros caractères), et inversion
+  // possible pour les étiquettes sombres à lettres claires.
+  function preparer(img, local, inverser) {
+    const c = canvasReduit(img, TAILLE_LECTURE, true);
+    const w = c.width, h = c.height;
     const ctx = c.getContext('2d');
-    const d = ctx.getImageData(0, 0, c.width, c.height);
+    const d = ctx.getImageData(0, 0, w, h);
     const p = d.data;
+    const gris = new Float32Array(w * h);
     let min = 255, max = 0;
-    for (let i = 0; i < p.length; i += 4) {
+    for (let i = 0, j = 0; i < p.length; i += 4, j++) {
       const g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
-      p[i] = g;
+      gris[j] = g;
       if (g < min) min = g;
       if (g > max) max = g;
     }
     const etendue = Math.max(1, max - min);
-    for (let i = 0; i < p.length; i += 4) {
-      const g = ((p[i] - min) * 255) / etendue;
-      p[i] = p[i + 1] = p[i + 2] = g;
+    const sortie = new Float32Array(w * h);
+    if (local) {
+      // Image intégrale : moyenne locale en temps constant.
+      const I = new Float64Array((w + 1) * (h + 1));
+      for (let y = 0; y < h; y++) {
+        let ligne = 0;
+        for (let x = 0; x < w; x++) {
+          ligne += gris[y * w + x];
+          I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + ligne;
+        }
+      }
+      const r = Math.max(20, Math.round(Math.min(w, h) / 10));
+      for (let y = 0; y < h; y++) {
+        const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+        for (let x = 0; x < w; x++) {
+          const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+          const somme = I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0];
+          sortie[y * w + x] = 128 + (gris[y * w + x] - somme / ((x1 - x0) * (y1 - y0))) * 2.5;
+        }
+      }
+    } else {
+      for (let j = 0; j < sortie.length; j++) sortie[j] = ((gris[j] - min) * 255) / etendue;
+    }
+    for (let j = 0, i = 0; j < sortie.length; j++, i += 4) {
+      let v = sortie[j] < 0 ? 0 : sortie[j] > 255 ? 255 : sortie[j];
+      if (inverser) v = 255 - v;
+      p[i] = p[i + 1] = p[i + 2] = v;
     }
     ctx.putImageData(d, 0, 0);
     return c;
@@ -93,7 +121,7 @@ const SCAN = (() => {
     for (const b of data.blocks || []) for (const p of b.paragraphs) for (const l of p.lines) {
       const texte = nettoyer(l.text);
       const utile = (texte.match(/\p{L}/gu) || []).length >= 2 || /\b(19|20)\d\d\b/.test(texte);
-      if (l.confidence >= 45 && utile) lignes.push({ texte, hauteur: l.bbox.y1 - l.bbox.y0 });
+      if (l.confidence >= 35 && utile) lignes.push({ texte, hauteur: l.bbox.y1 - l.bbox.y0 });
     }
     // « CHÂTEAU » seul sur sa ligne : le nom est sur la ligne suivante.
     for (let i = 0; i < lignes.length - 1; i++) {
@@ -105,7 +133,49 @@ const SCAN = (() => {
     return { texte: data.text || '', lignes };
   }
 
+  function fusionner(a, b) {
+    const vues = new Set(a.lignes.map((l) => norm(l.texte)));
+    const lignes = [...a.lignes];
+    for (const l of b.lignes) {
+      const k = norm(l.texte);
+      // Écarte les doublons et les lignes déjà contenues dans une autre.
+      if (!k || vues.has(k) || [...vues].some((v) => v.includes(k))) continue;
+      vues.add(k);
+      lignes.push(l);
+    }
+    const vuesTexte = new Set();
+    const texte = `${a.texte}\n${b.texte}`.split('\n').map((l) => l.trim()).filter((l) => l && !vuesTexte.has(l) && vuesTexte.add(l)).join('\n');
+    return { lignes, texte };
+  }
+
   // ---------- Analyse ----------
+  // Distance d'édition : tolère les lettres mal lues (« CHATEAUNEUF-DU-PAPF »).
+  function distance(a, b) {
+    const m = a.length, n = b.length;
+    let prec = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      const cur = [i];
+      for (let j = 1; j <= n; j++) cur[j] = Math.min(prec[j] + 1, cur[j - 1] + 1, prec[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prec = cur;
+    }
+    return prec[n];
+  }
+
+  // Appellation reconnue de façon approchée dans les lignes lues (nom assez long pour éviter les faux positifs).
+  function appellationApprochee(lignes) {
+    let meilleure = null, score = 0.8;
+    for (const l of lignes) {
+      const k = norm(l.texte).replace(/\b(appellation|controlee|protegee|aop|aoc)\b/g, '').trim();
+      if (k.length < 6) continue;
+      for (const a of APPELLATIONS) {
+        if (a.cle.length < 6) continue;
+        const r = 1 - distance(k, a.cle) / Math.max(k.length, a.cle.length);
+        if (r > score) { score = r; meilleure = a; }
+      }
+    }
+    return meilleure;
+  }
+
   // Parmi les appellations trouvées, garde la plus précise : « Chablis » plutôt que « Bourgogne ».
   function choisirAppellation(n) {
     const trouvees = APPELLATIONS.filter((a) => n.includes(` ${a.cle} `));
@@ -122,7 +192,8 @@ const SCAN = (() => {
       cepages: '', degre: null, contenance: '75 cl', profilGarde: '' };
 
     // Appellation : d'abord la liste connue, sinon la formule « Appellation X Contrôlée ».
-    const app = choisirAppellation(n);
+    let app = choisirAppellation(n);
+    if (!app) { app = appellationApprochee(lignes); if (app) doutes.add('appellation'); }
     if (app) {
       Object.assign(fiche, { appellation: app.nom, region: app.region, pays: app.pays });
     } else {
@@ -213,14 +284,27 @@ const SCAN = (() => {
     if (typeof Tesseract === 'undefined') throw new Error("Le lecteur d'étiquettes n'est pas encore chargé. Vérifie ta connexion et réessaie.");
     const img = await charger(fichier);
     let lu;
-    try { lu = await lireTexte(preparer(img)); } catch (e) {
+    try {
+      // Lectures successives, de la plus rapide à la plus poussée ; on s'arrête dès que la fiche est complète.
+      const passes = [[false, false], [true, false], [false, true], [true, true]];
+      for (let i = 0; i < passes.length; i++) {
+        if (i) suivi(`Lecture de l'étiquette, passe ${i + 1} sur ${passes.length}…`);
+        const lecture = await lireTexte(preparer(img, passes[i][0], passes[i][1]));
+        lu = lu ? fusionner(lu, lecture) : lecture;
+        const f = analyser(lu);
+        if (f.domaine && f.millesime && f.appellation && !f.champsIncertains.includes('domaine')) break;
+      }
+    } catch (e) {
       console.error(e);
       throw new Error("Le lecteur d'étiquettes n'a pas pu démarrer. Vérifie ta connexion pour le premier usage, puis réessaie.");
     }
     if ((lu.texte.match(/\p{L}/gu) || []).length < 12) {
-      throw new Error("Je n'arrive pas à lire l'étiquette. Reprends la photo de face, bien éclairée et nette.");
+      const err = new Error("Je n'arrive pas à lire l'étiquette. Reprends la photo de face, bien éclairée et nette.");
+      err.texte = lu.texte;
+      err.lignes = lu.lignes.map((l) => l.texte);
+      throw err;
     }
-    return { fiche: analyser(lu), photo: canvasReduit(img, TAILLE_PHOTO).toDataURL('image/jpeg', 0.7), texte: lu.texte };
+    return { fiche: analyser(lu), photo: canvasReduit(img, TAILLE_PHOTO).toDataURL('image/jpeg', 0.7), texte: lu.texte, lignes: lu.lignes.map((l) => l.texte) };
   }
 
   return { lireEtiquette, photoFiche, analyser };

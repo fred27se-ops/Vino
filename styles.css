@@ -194,3 +194,10 @@ input.ia-doute, select.ia-doute { border-color: #e5a04b; background: #fdf1e3; }
   input.ia, select.ia { background: #1f3323; }
   input.ia-doute, select.ia-doute { background: #3a2a17; }
 }
+
+.texte-lu { white-space: pre-wrap; font-size: .8rem; background: var(--carte); border: 1px solid var(--bord); border-radius: 8px; padding: 8px; max-height: 200px; overflow: auto; }
+#scan-texte summary { color: var(--doux); font-size: .85rem; cursor: pointer; }
+
+.mots { display: flex; flex-wrap: wrap; gap: 6px; }
+.mot { font: inherit; font-size: .85rem; padding: 6px 10px; min-height: 36px; border-radius: 999px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); cursor: pointer; }
+.mot:active { background: var(--bordeaux-clair); }
