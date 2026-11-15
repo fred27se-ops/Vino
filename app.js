@@ -509,7 +509,7 @@ async function ecranFormulaire(id) {
     etat.className = 'note attente';
     afficherTexteLu('');
     try {
-      const res = await SCAN.lireEtiquette(fichier, (m) => (etat.textContent = m));
+      const res = await SCAN.lireEtiquette(fichier, (m) => (etat.textContent = m), complement);
       afficherTexteLu(res.texte, res.lignes);
       if (!complement) photo = res.photo;
       remplirDepuisScan(form, res.fiche, complement);
@@ -631,7 +631,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 12</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 13</p>
     </section>`;
 
   document.getElementById('form-gemini').onsubmit = async (e) => {

@@ -281,8 +281,11 @@ const SCAN = (() => {
     return fiche;
   }
 
-  async function lireEtiquette(fichier, onProgres = () => {}) {
+  let faceGemini = null; // photo de face déjà envoyée à Gemini, pour la croiser avec la contre-étiquette
+
+  async function lireEtiquette(fichier, onProgres = () => {}, complement = false) {
     suivi = onProgres;
+    if (!complement) faceGemini = null;
     if (typeof Tesseract === 'undefined') throw new Error("Le lecteur d'étiquettes n'est pas encore chargé. Vérifie ta connexion et réessaie.");
     const img = await charger(fichier);
     const photo = canvasReduit(img, TAILLE_PHOTO).toDataURL('image/jpeg', 0.7);
@@ -294,7 +297,9 @@ const SCAN = (() => {
       const debutGemini = Date.now();
       onProgres("Lecture de l'étiquette par Gemini…");
       try {
-        const g = await GEMINI.lireEtiquette(canvasReduit(img, 1280).toDataURL('image/jpeg', 0.8).split(',')[1], cle);
+        const base64 = canvasReduit(img, 1280).toDataURL('image/jpeg', 0.8).split(',')[1];
+        const g = await GEMINI.lireEtiquette(complement && faceGemini ? [faceGemini, base64] : base64, cle);
+        if (!complement) faceGemini = base64;
         return { fiche: g.fiche, photo, texte: g.lignes.join('\n'), lignes: g.lignes, moteur: 'gemini', secondes: Math.round((Date.now() - debutGemini) / 1000) };
       } catch (e) {
         if (e.definitif) throw e;

@@ -136,8 +136,12 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     return GARDE.suggerer(f.couleur, f.type);
   }
 
-  async function lireEtiquette(base64, cle) {
-    const rep = await generer(cle, [{ text: CONSIGNE }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }]);
+  async function lireEtiquette(images, cle) {
+    const liste = Array.isArray(images) ? images : [images];
+    const intro = liste.length > 1
+      ? "Il y a deux photos de la MÊME bouteille : d'abord l'étiquette de face, puis la contre-étiquette. Croise-les pour remplir une seule fiche (le degré et les cépages sont souvent au dos).\n"
+      : '';
+    const rep = await generer(cle, [{ text: intro + CONSIGNE }, ...liste.map((data) => ({ inline_data: { mime_type: 'image/jpeg', data } }))]);
     const cand = rep.candidates?.[0];
     const sortie = (cand?.content?.parts || []).map((p) => p.text || '').join('');
     if (!sortie) {
