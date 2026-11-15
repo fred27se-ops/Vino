@@ -517,7 +517,7 @@ async function ecranFormulaire(id) {
       profilTouche = true;
       majApercu();
       const doutes = res.fiche.champsIncertains.length;
-      const origine = res.moteur === 'gemini' ? ' par Gemini' : '';
+      const origine = res.moteur === 'gemini' ? ` par Gemini (${res.secondes} s)` : ' sur le téléphone';
       etat.textContent = (res.avertissement ? res.avertissement + ' ' : '') + (complement
         ? 'Contre-étiquette lue : seuls les champs vides ont été complétés.'
         : (doutes
@@ -631,7 +631,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 6</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 7</p>
     </section>`;
 
   document.getElementById('form-gemini').onsubmit = async (e) => {

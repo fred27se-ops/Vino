@@ -291,10 +291,11 @@ const SCAN = (() => {
     let avertissement = '';
     const cle = (await DB.get('reglages', 'cleGemini'))?.valeur;
     if (cle && typeof GEMINI !== 'undefined') {
+      const debutGemini = Date.now();
       onProgres("Lecture de l'étiquette par Gemini…");
       try {
         const g = await GEMINI.lireEtiquette(canvasReduit(img, 1280).toDataURL('image/jpeg', 0.8).split(',')[1], cle);
-        return { fiche: g.fiche, photo, texte: g.lignes.join('\n'), lignes: g.lignes, moteur: 'gemini' };
+        return { fiche: g.fiche, photo, texte: g.lignes.join('\n'), lignes: g.lignes, moteur: 'gemini', secondes: Math.round((Date.now() - debutGemini) / 1000) };
       } catch (e) {
         if (e.definitif) throw e;
         avertissement = `${e.message} Lecture sur le téléphone à la place.`;
