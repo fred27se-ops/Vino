@@ -46,7 +46,7 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     if (status === 401 || status === 403) return "Clé Gemini refusée ou sans accès. Vérifie-la dans les réglages (ou ta région n'est pas autorisée).";
     if (status === 404) return 'Modèle Gemini introuvable.';
     if (status === 429) return 'Limite gratuite de Gemini atteinte pour le moment. Réessaie plus tard.';
-    if (status >= 500) return 'Gemini est momentanément indisponible.';
+    if (status >= 500) return `Gemini est momentanément indisponible (${status}${detail ? ' : ' + detail.slice(0, 100) : ''}).`;
     return `Erreur Gemini (${status})${detail ? ' : ' + detail.slice(0, 120) : ''}.`;
   }
 
@@ -86,7 +86,7 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     } catch (e) {
       if (e.status === 400 && !sansReflexion) return generer(cle, parts, tentative, true, essai);
       // Modèle retiré depuis le dernier choix : on en choisit un autre une seule fois.
-      if ((e.status === 404 || (e.delai && essai)) && tentative < 4) {
+      if ((e.status === 404 || (essai && (e.delai || e.status >= 500))) && tentative < 4) {
         const ecartes = (await DB.get('reglages', 'modelesEcartes'))?.valeur || [];
         await DB.put('reglages', { id: 'modelesEcartes', valeur: [...ecartes, modele] });
         await DB.del('reglages', 'modeleGemini');
