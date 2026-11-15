@@ -209,6 +209,7 @@ async function ecranFiche(id) {
         </div>
       </div>
       ${v.photo ? `<img class="photo-fiche" src="${v.photo}" alt="Étiquette de ${esc(nomVin(v))}">` : ''}
+      ${v.photoDos ? `<img class="photo-fiche" src="${v.photoDos}" alt="Contre-étiquette de ${esc(nomVin(v))}">` : ''}
 
       <div class="stock">
         <div><strong>${v.quantite}</strong> bouteille${v.quantite > 1 ? 's' : ''} en cave</div>
@@ -387,6 +388,7 @@ async function ecranFormulaire(id) {
           <input type="file" id="in-photo" accept="image/*" capture="environment" hidden>
         </label>
         <img id="apercu-photo" class="photo-apercu" alt="" ${v?.photo ? `src="${v.photo}"` : 'hidden'}>
+        <img id="apercu-dos" class="photo-apercu" alt="Contre-étiquette" ${v?.photoDos ? `src="${v.photoDos}"` : 'hidden'}>
         <div id="scan-mots" class="mots" hidden></div>
         <details id="scan-texte" hidden><summary>Voir le texte lu sur l'étiquette</summary><pre class="texte-lu"></pre></details>
         <p class="note" id="scan-etat">${v ? '' : "L'app lit l'étiquette et pré-remplit la fiche ; tu vérifies avant d'enregistrer."}</p>
@@ -470,6 +472,7 @@ async function ecranFormulaire(id) {
   document.getElementById('btn-annuler').onclick = () => history.back();
 
   let photo = v?.photo || null;
+  let photoDos = v?.photoDos || null;
   const etat = document.getElementById('scan-etat');
   // Dernier champ touché : un mot lu touché ensuite est placé dedans.
   let champCible = form.elements.domaine;
@@ -512,6 +515,12 @@ async function ecranFormulaire(id) {
       const res = await SCAN.lireEtiquette(fichier, (m) => (etat.textContent = m), complement);
       afficherTexteLu(res.texte, res.lignes);
       if (!complement) photo = res.photo;
+      else {
+        photoDos = await SCAN.photoFiche(fichier);
+        const dos = document.getElementById('apercu-dos');
+        dos.src = photoDos;
+        dos.hidden = false;
+      }
       remplirDepuisScan(form, res.fiche, complement);
       form.dataset.scanne = '1';
       profilTouche = true;
@@ -545,7 +554,7 @@ async function ecranFormulaire(id) {
       pays: texte('pays'), region: texte('region'), appellation: texte('appellation'),
       cepages: texte('cepages'), degre: num(fd.get('degre')), profilGarde: texte('profilGarde'),
       boireDe: num(fd.get('boireDe')), apogee: num(fd.get('apogee')), boireAvant: num(fd.get('boireAvant')),
-      notes: texte('notes'), photo, modifie: Date.now(),
+      notes: texte('notes'), photo, photoDos, modifie: Date.now(),
     };
     if (!v) {
       const lot = lotDepuis(fd, { id: DB.uid(), vinId: vin.id });
@@ -631,7 +640,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 13</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 14</p>
     </section>`;
 
   document.getElementById('form-gemini').onsubmit = async (e) => {

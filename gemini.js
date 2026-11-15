@@ -110,13 +110,15 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
   function nettoyer(brut) {
     const annee = new Date().getFullYear();
     const choix = (v, ok, defaut) => (ok.includes(v) ? v : defaut);
+    // Gemini renvoie parfois « 13,5 » ou « 13.5% » en texte plutôt qu'un nombre.
+    const degre = typeof brut.degre === 'number' ? brut.degre : parseFloat(String(brut.degre ?? '').replace(',', '.'));
     const f = {
       domaine: texte(brut.domaine), cuvee: texte(brut.cuvee),
       millesime: Number.isInteger(brut.millesime) && brut.millesime >= 1900 && brut.millesime <= annee ? brut.millesime : null,
       couleur: choix(brut.couleur, Object.keys(COULEURS), 'rouge'),
       type: choix(brut.type, Object.keys(TYPES), 'tranquille'),
       pays: texte(brut.pays), region: texte(brut.region), appellation: texte(brut.appellation), cepages: texte(brut.cepages, 120),
-      degre: typeof brut.degre === 'number' && brut.degre >= 7 && brut.degre <= 23 ? brut.degre : null,
+      degre: degre >= 7 && degre <= 23 ? degre : null,
       contenance: choix(brut.contenance, CONTENANCES, '75 cl'),
     };
     f.profilGarde = profilGarde(f);
