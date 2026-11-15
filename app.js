@@ -389,6 +389,7 @@ async function ecranFormulaire(id) {
         </label>
         <img id="apercu-photo" class="photo-apercu" alt="" ${v?.photo ? `src="${v.photo}"` : 'hidden'}>
         <img id="apercu-dos" class="photo-apercu" alt="Contre-étiquette" ${v?.photoDos ? `src="${v.photoDos}"` : 'hidden'}>
+        <button type="button" class="btn primaire" id="invite-dos" hidden>&#128247; Photographier la contre-étiquette</button>
         <div id="scan-mots" class="mots" hidden></div>
         <details id="scan-texte" hidden><summary>Voir le texte lu sur l'étiquette</summary><pre class="texte-lu"></pre></details>
         <p class="note" id="scan-etat">${v ? '' : "L'app lit l'étiquette et pré-remplit la fiche ; tu vérifies avant d'enregistrer."}</p>
@@ -496,6 +497,7 @@ async function ecranFormulaire(id) {
       });
     });
   };
+  document.getElementById('invite-dos').onclick = () => document.getElementById('in-photo').click();
   document.getElementById('in-photo').addEventListener('change', async (e) => {
     const fichier = e.target.files[0];
     e.target.value = '';
@@ -523,6 +525,7 @@ async function ecranFormulaire(id) {
       }
       remplirDepuisScan(form, res.fiche, complement);
       form.dataset.scanne = '1';
+      document.getElementById('invite-dos').hidden = complement;
       profilTouche = true;
       majApercu();
       const doutes = res.fiche.champsIncertains.length;
@@ -532,7 +535,7 @@ async function ecranFormulaire(id) {
         : (doutes
           ? `Fiche pré-remplie${origine}. Vérifie surtout les ${doutes} champ${doutes > 1 ? 's' : ''} en orange, puis complète l'achat.`
           : `Fiche pré-remplie${origine}. Vérifie-la, puis complète l'achat.`)
-        + ' Taux d\'alcool absent ? Scanne la contre-étiquette.');
+        + ' Étape suivante : photographie la contre-étiquette pour le taux d\'alcool et les cépages.');
       etat.className = res.avertissement ? 'note attente' : 'note ok';
     } catch (err) {
       // La photo reste attachée à la fiche même si la lecture échoue.
@@ -640,7 +643,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 14</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 15</p>
     </section>`;
 
   document.getElementById('form-gemini').onsubmit = async (e) => {
