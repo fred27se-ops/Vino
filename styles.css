@@ -179,3 +179,18 @@ details summary { cursor: pointer; color: var(--bordeaux); margin-bottom: 8px; }
 @media (max-width: 360px) {
   .deux, .trois, .filtres-grille { grid-template-columns: 1fr; }
 }
+
+/* Scan d'étiquette */
+.scan { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.scan .btn { width: 100%; }
+.photo-apercu, .photo-fiche { width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; background: var(--carte); border: 1px solid var(--bord); }
+.photo-fiche { margin-bottom: 12px; }
+.note.attente { color: var(--bordeaux); font-weight: 600; }
+.note.ok { color: #23662e; }
+.note.erreur { color: var(--danger); }
+input.ia, select.ia { border-color: #7fbf87; background: #eef8ef; }
+input.ia-doute, select.ia-doute { border-color: #e5a04b; background: #fdf1e3; }
+@media (prefers-color-scheme: dark) {
+  input.ia, select.ia { background: #1f3323; }
+  input.ia-doute, select.ia-doute { background: #3a2a17; }
+}

@@ -208,6 +208,7 @@ async function ecranFiche(id) {
           <p class="sous">${esc([v.appellation, v.millesime].filter(Boolean).join(' · '))}</p>
         </div>
       </div>
+      ${v.photo ? `<img class="photo-fiche" src="${v.photo}" alt="Étiquette de ${esc(nomVin(v))}">` : ''}
 
       <div class="stock">
         <div><strong>${v.quantite}</strong> bouteille${v.quantite > 1 ? 's' : ''} en cave</div>
@@ -381,6 +382,13 @@ async function ecranFormulaire(id) {
 
   view.innerHTML = `
     <form class="formulaire" id="form-vin" autocomplete="off">
+      <section class="scan">
+        <label class="btn primaire">&#128247; ${v?.photo ? "Reprendre la photo de l'étiquette" : "Scanner l'étiquette"}
+          <input type="file" id="in-photo" accept="image/*" capture="environment" hidden>
+        </label>
+        <img id="apercu-photo" class="photo-apercu" alt="" ${v?.photo ? `src="${v.photo}"` : 'hidden'}>
+        <p class="note" id="scan-etat">${v ? '' : "L'app lit l'étiquette et pré-remplit la fiche ; tu vérifies avant d'enregistrer."}</p>
+      </section>
       <fieldset>
         <legend>Le vin</legend>
         <label>Domaine / château<input name="domaine" value="${val('domaine')}" list="dl-domaine" required></label>
@@ -458,6 +466,37 @@ async function ecranFormulaire(id) {
   majApercu();
   document.getElementById('btn-annuler').onclick = () => history.back();
 
+  let photo = v?.photo || null;
+  const etat = document.getElementById('scan-etat');
+  document.getElementById('in-photo').addEventListener('change', async (e) => {
+    const fichier = e.target.files[0];
+    e.target.value = '';
+    if (!fichier) return;
+    const apercu = document.getElementById('apercu-photo');
+    apercu.src = URL.createObjectURL(fichier);
+    apercu.hidden = false;
+    form.querySelectorAll('.ia, .ia-doute').forEach((el) => el.classList.remove('ia', 'ia-doute'));
+    etat.textContent = "Lecture de l'étiquette…";
+    etat.className = 'note attente';
+    try {
+      const res = await SCAN.lireEtiquette(fichier, (m) => (etat.textContent = m));
+      photo = res.photo;
+      remplirDepuisScan(form, res.fiche);
+      profilTouche = true;
+      majApercu();
+      const doutes = res.fiche.champsIncertains.length;
+      etat.textContent = doutes
+        ? `Fiche pré-remplie. Vérifie surtout les ${doutes} champ${doutes > 1 ? 's' : ''} en orange, puis complète l'achat.`
+        : "Fiche pré-remplie. Vérifie-la, puis complète l'achat.";
+      etat.className = 'note ok';
+    } catch (err) {
+      // La photo reste attachée à la fiche même si la lecture échoue.
+      try { photo = await SCAN.photoFiche(fichier); } catch {}
+      etat.textContent = err.message;
+      etat.className = 'note erreur';
+    }
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
@@ -469,7 +508,7 @@ async function ecranFormulaire(id) {
       pays: texte('pays'), region: texte('region'), appellation: texte('appellation'),
       cepages: texte('cepages'), degre: num(fd.get('degre')), profilGarde: texte('profilGarde'),
       boireDe: num(fd.get('boireDe')), apogee: num(fd.get('apogee')), boireAvant: num(fd.get('boireAvant')),
-      notes: texte('notes'), modifie: Date.now(),
+      notes: texte('notes'), photo, modifie: Date.now(),
     };
     if (!v) {
       const lot = lotDepuis(fd, { id: DB.uid(), vinId: vin.id });
@@ -484,6 +523,19 @@ async function ecranFormulaire(id) {
     toast('Vin enregistré');
     location.replace('#/vin/' + vin.id);
   });
+}
+
+// Reporte la fiche lue sur l'étiquette dans le formulaire et signale les champs à vérifier.
+function remplirDepuisScan(form, fiche) {
+  const champs = ['domaine', 'cuvee', 'millesime', 'couleur', 'type', 'pays', 'region', 'appellation', 'cepages', 'degre', 'contenance', 'profilGarde'];
+  for (const k of champs) {
+    const el = form.elements[k];
+    const val = fiche[k];
+    if (!el || val === null || val === undefined || val === '') continue;
+    el.value = val;
+    el.classList.add(fiche.champsIncertains.includes(k) ? 'ia-doute' : 'ia');
+  }
+  for (const k of fiche.champsIncertains) form.elements[k]?.classList.add('ia-doute');
 }
 
 // Retire les champs calculés avant d'enregistrer un vin.
@@ -528,7 +580,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 1</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 2</p>
     </section>`;
 
   document.getElementById('form-etagere').onsubmit = async (e) => {
