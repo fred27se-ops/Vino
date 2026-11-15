@@ -1,6 +1,6 @@
 // Service worker : permet d'ouvrir l'app sans réseau.
 // Changer VERSION à chaque mise en ligne pour que les téléphones récupèrent la nouvelle version.
-const VERSION = 'ap-vino-v3';
+const VERSION = 'ap-vino-v4';
 const FICHIERS = [
   './', 'index.html', 'styles.css', 'db.js', 'garde.js', 'app.js', 'appellations.js', 'scan.js', 'vendor/tesseract/tesseract.min.js', 'vendor/tesseract/worker.min.js',
   'vendor/tesseract/tesseract-core-lstm.wasm.js', 'vendor/tesseract/tesseract-core-simd-lstm.wasm.js', 'vendor/tesseract/lang/fra.traineddata.gz', 'manifest.webmanifest',
@@ -19,11 +19,12 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// no-cache : vérifie toujours auprès de GitHub si le fichier a changé, sinon le navigateur peut garder l'ancien jusqu'à 10 minutes.
 // Réseau d'abord (pour avoir la dernière version), cache si hors-ligne.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((rep) => {
         const copie = rep.clone();
         caches.open(VERSION).then((c) => c.put(e.request, copie));
