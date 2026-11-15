@@ -631,7 +631,7 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 7</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 8</p>
     </section>`;
 
   document.getElementById('form-gemini').onsubmit = async (e) => {
@@ -647,7 +647,7 @@ async function ecranReglages() {
     await DB.put('reglages', { id: 'cleGemini', valeur: cle });
     etat.textContent = 'Test de la clé…';
     const r = await GEMINI.tester(cle);
-    etat.textContent = r.ok ? `Clé fonctionnelle (modèle ${r.modele}).` : `Clé enregistrée, mais le test a échoué : ${r.erreur || 'pas de réponse'}`;
+    etat.textContent = r.ok ? `Clé fonctionnelle (modèle ${r.modele}, réponse en ${r.secondes} s).` : `Clé enregistrée, mais le test a échoué : ${r.erreur || 'pas de réponse'}`;
     etat.className = r.ok ? 'note ok' : 'note erreur';
   };
 

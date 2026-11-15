@@ -58,6 +58,9 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     const version = (m) => parseFloat(m.name.match(/gemini-([\d.]+)-flash/)[1]);
     const stable = (m) => !/preview|-\d{3}$|-\d{2}-\d{2}/.test(m.name);
     utilisables.sort((a, b) => (stable(b) - stable(a)) || (version(b) - version(a)));
+    // Modèle rapide connu en priorité : les plus récents « réfléchissent » longtemps et dépassent le délai.
+    const rapide = utilisables.findIndex((m) => m.name === 'models/gemini-2.5-flash');
+    if (rapide > 0) utilisables.unshift(utilisables.splice(rapide, 1)[0]);
     if (!utilisables.length) throw new Error("Aucun modèle Gemini « flash » n'est disponible avec cette clé.");
     const nom = utilisables[0].name.replace(/^models\//, '');
     await DB.put('reglages', { id: 'modeleGemini', valeur: nom });
@@ -69,13 +72,16 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     try {
       // Les modèles 2.5 « réfléchissent » longtemps par défaut : inutile pour lire une étiquette, on coupe.
       const config = { responseMimeType: 'application/json', temperature: 0 };
-      if (/gemini-2\.5/.test(modele) && !sansReflexion) config.thinkingConfig = { thinkingBudget: 0 };
+      if (!sansReflexion) {
+        if (/gemini-2\.5/.test(modele)) config.thinkingConfig = { thinkingBudget: 0 };
+        else if (/gemini-[3-9]/.test(modele)) config.thinkingConfig = { thinkingLevel: 'minimal' };
+      }
       return await appel(`models/${modele}:generateContent`, cle, {
         method: 'POST',
         body: JSON.stringify({ contents: [{ parts }], generationConfig: config }),
       });
     } catch (e) {
-      if (e.status === 400 && !sansReflexion && /gemini-2\.5/.test(modele)) return generer(cle, parts, tentative, true);
+      if (e.status === 400 && !sansReflexion) return generer(cle, parts, tentative, true);
       // Modèle retiré depuis le dernier choix : on en choisit un autre une seule fois.
       if (e.status === 404 && !tentative) { await DB.del('reglages', 'modeleGemini'); return generer(cle, parts, 1, sansReflexion); }
       throw e;
@@ -133,13 +139,15 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
 
   // Vérifie la clé : choisit un modèle puis lui pose une question simple.
   async function tester(cle) {
+    const debut = Date.now();
     try {
       await DB.del('reglages', 'modeleGemini');
       const rep = await generer(cle, [{ text: 'Réponds par le mot OK.' }]);
       const modele = (await DB.get('reglages', 'modeleGemini'))?.valeur;
-      return { ok: !!rep.candidates?.length, modele };
+      return { ok: !!rep.candidates?.length, modele, secondes: Math.round((Date.now() - debut) / 1000) };
     } catch (e) {
-      return { ok: false, erreur: e.message };
+      const modele = (await DB.get('reglages', 'modeleGemini'))?.valeur;
+      return { ok: false, erreur: `${e.message}${modele ? ` (modèle ${modele}, ${Math.round((Date.now() - debut) / 1000)} s)` : ''}` };
     }
   }
 
