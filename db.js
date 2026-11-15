@@ -3,6 +3,8 @@ const DB = (() => {
   const NAME = 'ap-vino';
   const VERSION = 1;
   const STORES = ['vins', 'lots', 'mouvements', 'etageres', 'reglages'];
+  // Réglages propres à ce téléphone : la clé Gemini ne doit jamais se retrouver dans un fichier de sauvegarde.
+  const LOCAUX = ['cleGemini', 'modeleGemini'];
   let dbPromise = null;
 
   function open() {
@@ -54,16 +56,19 @@ const DB = (() => {
   async function exportAll() {
     const data = { app: 'ap-vino', format: 1, date: new Date().toISOString() };
     for (const s of STORES) data[s] = await all(s);
+    data.reglages = data.reglages.filter((r) => !LOCAUX.includes(r.id));
     return data;
   }
 
   async function importAll(data) {
     if (!data || data.app !== 'ap-vino') throw new Error("Ce fichier n'est pas une sauvegarde Ap Vino.");
+    const garder = (await all('reglages')).filter((r) => LOCAUX.includes(r.id));
     await clearAll();
     const db = await open();
     return new Promise((resolve, reject) => {
       const t = db.transaction(STORES, 'readwrite');
       for (const s of STORES) for (const obj of data[s] || []) t.objectStore(s).put(obj);
+      for (const r of garder) t.objectStore('reglages').put(r);
       t.oncomplete = () => resolve();
       t.onerror = () => reject(t.error);
     });

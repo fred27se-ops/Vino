@@ -497,28 +497,37 @@ async function ecranFormulaire(id) {
     const fichier = e.target.files[0];
     e.target.value = '';
     if (!fichier) return;
-    const apercu = document.getElementById('apercu-photo');
-    apercu.src = URL.createObjectURL(fichier);
-    apercu.hidden = false;
-    form.querySelectorAll('.ia, .ia-doute').forEach((el) => el.classList.remove('ia', 'ia-doute'));
+    // Deuxième photo (contre-étiquette) : on ne complète que les champs encore vides.
+    const complement = form.dataset.scanne === '1';
+    if (!complement) {
+      const apercu = document.getElementById('apercu-photo');
+      apercu.src = URL.createObjectURL(fichier);
+      apercu.hidden = false;
+      form.querySelectorAll('.ia, .ia-doute').forEach((el) => el.classList.remove('ia', 'ia-doute'));
+    }
     etat.textContent = "Lecture de l'étiquette…";
     etat.className = 'note attente';
     afficherTexteLu('');
     try {
       const res = await SCAN.lireEtiquette(fichier, (m) => (etat.textContent = m));
       afficherTexteLu(res.texte, res.lignes);
-      photo = res.photo;
-      remplirDepuisScan(form, res.fiche);
+      if (!complement) photo = res.photo;
+      remplirDepuisScan(form, res.fiche, complement);
+      form.dataset.scanne = '1';
       profilTouche = true;
       majApercu();
       const doutes = res.fiche.champsIncertains.length;
-      etat.textContent = doutes
-        ? `Fiche pré-remplie. Vérifie surtout les ${doutes} champ${doutes > 1 ? 's' : ''} en orange, puis complète l'achat.`
-        : "Fiche pré-remplie. Vérifie-la, puis complète l'achat.";
-      etat.className = 'note ok';
+      const origine = res.moteur === 'gemini' ? ' par Gemini' : '';
+      etat.textContent = (res.avertissement ? res.avertissement + ' ' : '') + (complement
+        ? 'Contre-étiquette lue : seuls les champs vides ont été complétés.'
+        : (doutes
+          ? `Fiche pré-remplie${origine}. Vérifie surtout les ${doutes} champ${doutes > 1 ? 's' : ''} en orange, puis complète l'achat.`
+          : `Fiche pré-remplie${origine}. Vérifie-la, puis complète l'achat.`)
+        + ' Taux d\'alcool absent ? Scanne la contre-étiquette.');
+      etat.className = res.avertissement ? 'note attente' : 'note ok';
     } catch (err) {
       // La photo reste attachée à la fiche même si la lecture échoue.
-      try { photo = await SCAN.photoFiche(fichier); } catch {}
+      if (!complement) { try { photo = await SCAN.photoFiche(fichier); } catch {} }
       etat.textContent = err.message;
       etat.className = 'note erreur';
       afficherTexteLu(err.texte, err.lignes);
@@ -554,16 +563,18 @@ async function ecranFormulaire(id) {
 }
 
 // Reporte la fiche lue sur l'étiquette dans le formulaire et signale les champs à vérifier.
-function remplirDepuisScan(form, fiche) {
+function remplirDepuisScan(form, fiche, complement = false) {
   const champs = ['domaine', 'cuvee', 'millesime', 'couleur', 'type', 'pays', 'region', 'appellation', 'cepages', 'degre', 'contenance', 'profilGarde'];
   for (const k of champs) {
     const el = form.elements[k];
     const val = fiche[k];
     if (!el || val === null || val === undefined || val === '') continue;
+    // En complément, ni les listes déroulantes ni les champs déjà remplis ne sont touchés.
+    if (complement && (el.tagName === 'SELECT' || el.value !== '')) continue;
     el.value = val;
     el.classList.add(fiche.champsIncertains.includes(k) ? 'ia-doute' : 'ia');
   }
-  for (const k of fiche.champsIncertains) form.elements[k]?.classList.add('ia-doute');
+  if (!complement) for (const k of fiche.champsIncertains) form.elements[k]?.classList.add('ia-doute');
 }
 
 // Retire les champs calculés avant d'enregistrer un vin.
@@ -580,7 +591,19 @@ async function ecranReglages() {
   const persistant = navigator.storage?.persisted ? await navigator.storage.persisted() : false;
   const peutPartager = !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.json', { type: 'application/json' })] }));
 
+  const cleGemini = (await DB.get('reglages', 'cleGemini'))?.valeur || '';
+
   view.innerHTML = `
+    <section class="bloc">
+      <h3>Lecture par Gemini (facultatif)</h3>
+      <p class="note">Plus fiable que la lecture sur le téléphone : l'étiquette est envoyée à Google, qui répond avec la fiche. Il faut une clé gratuite sur aistudio.google.com/apikey. Avec l'offre gratuite, Google peut utiliser les photos envoyées pour améliorer ses produits. La clé reste sur ce téléphone, jamais dans les sauvegardes. Sans clé, ou en cas de problème, la lecture se fait sur le téléphone.</p>
+      <form id="form-gemini">
+        <label>Clé Gemini<input name="cle" type="password" autocomplete="off" placeholder="AIza…" value="${esc(cleGemini)}"></label>
+        <div class="actions"><button class="btn primaire">Enregistrer et tester</button></div>
+        <p class="note" id="gemini-etat">${cleGemini ? 'Clé enregistrée.' : 'Aucune clé : lecture sur le téléphone.'}</p>
+      </form>
+    </section>
+
     <section class="bloc">
       <h3>Mes étagères</h3>
       <ul class="etageres">${etageres.map((e) => `<li>
@@ -608,8 +631,25 @@ async function ecranReglages() {
 
     <section class="bloc">
       <h3>À propos</h3>
-      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 4</p>
+      <p class="note">Ap Vino · ${vins.length} vin${vins.length > 1 ? 's' : ''} enregistré${vins.length > 1 ? 's' : ''} · version 5</p>
     </section>`;
+
+  document.getElementById('form-gemini').onsubmit = async (e) => {
+    e.preventDefault();
+    const etat = document.getElementById('gemini-etat');
+    const cle = e.target.cle.value.trim();
+    if (!cle) {
+      await DB.del('reglages', 'cleGemini');
+      await DB.del('reglages', 'modeleGemini');
+      etat.textContent = 'Clé effacée : lecture sur le téléphone.';
+      return;
+    }
+    await DB.put('reglages', { id: 'cleGemini', valeur: cle });
+    etat.textContent = 'Test de la clé…';
+    const r = await GEMINI.tester(cle);
+    etat.textContent = r.ok ? `Clé fonctionnelle (modèle ${r.modele}).` : `Clé enregistrée, mais le test a échoué : ${r.erreur || 'pas de réponse'}`;
+    etat.className = r.ok ? 'note ok' : 'note erreur';
+  };
 
   document.getElementById('form-etagere').onsubmit = async (e) => {
     e.preventDefault();

@@ -285,6 +285,21 @@ const SCAN = (() => {
     suivi = onProgres;
     if (typeof Tesseract === 'undefined') throw new Error("Le lecteur d'étiquettes n'est pas encore chargé. Vérifie ta connexion et réessaie.");
     const img = await charger(fichier);
+    const photo = canvasReduit(img, TAILLE_PHOTO).toDataURL('image/jpeg', 0.7);
+
+    // Gemini d'abord si une clé est enregistrée ; en cas d'échec (réseau, limite gratuite…), lecture sur le téléphone.
+    let avertissement = '';
+    const cle = (await DB.get('reglages', 'cleGemini'))?.valeur;
+    if (cle && typeof GEMINI !== 'undefined') {
+      onProgres("Lecture de l'étiquette par Gemini…");
+      try {
+        const g = await GEMINI.lireEtiquette(canvasReduit(img, 1600).toDataURL('image/jpeg', 0.85).split(',')[1], cle);
+        return { fiche: g.fiche, photo, texte: g.lignes.join('\n'), lignes: g.lignes, moteur: 'gemini' };
+      } catch (e) {
+        if (e.definitif) throw e;
+        avertissement = `${e.message} Lecture sur le téléphone à la place.`;
+      }
+    }
     let lu;
     try {
       // Lectures successives, de la plus rapide à la plus poussée ; on s'arrête dès que la fiche est complète.
@@ -306,7 +321,7 @@ const SCAN = (() => {
       err.lignes = lu.lignes.map((l) => l.texte);
       throw err;
     }
-    return { fiche: analyser(lu), photo: canvasReduit(img, TAILLE_PHOTO).toDataURL('image/jpeg', 0.7), texte: lu.texte, lignes: lu.lignes.map((l) => l.texte) };
+    return { fiche: analyser(lu), photo, texte: lu.texte, lignes: lu.lignes.map((l) => l.texte), moteur: 'telephone', avertissement };
   }
 
   return { lireEtiquette, photoFiche, analyser };
