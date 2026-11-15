@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6d1a36">
+  <meta name="description" content="Ap Vino : gestion de ma cave à vin">
+  <title>Ap Vino</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="back-btn" aria-label="Retour" hidden>&#8592;</button>
+    <h1 id="page-title">Ma cave</h1>
+    <button class="icon-btn" id="settings-btn" aria-label="Réglages">&#9881;</button>
+  </header>
+
+  <div id="backup-banner" class="banner" hidden></div>
+
+  <main id="view"></main>
+
+  <button class="fab" id="add-btn" aria-label="Ajouter un vin">+</button>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="db.js"></script>
+  <script src="garde.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
