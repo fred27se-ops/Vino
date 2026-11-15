@@ -25,8 +25,10 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     try {
       rep = await fetch(`${BASE}/${chemin}`, { ...options, signal: AbortSignal.timeout(options.body ? 30000 : 15000), headers: { 'x-goog-api-key': cle, 'Content-Type': 'application/json' } });
     } catch (err) {
-      const e = new Error(err && err.name === 'TimeoutError' ? 'Gemini met trop de temps à répondre.' : 'Pas de connexion internet.');
+      const delai = !!err && err.name === 'TimeoutError';
+      const e = new Error(delai ? 'Gemini met trop de temps à répondre.' : 'Pas de connexion internet.');
       e.reseau = true;
+      e.delai = delai;
       throw e;
     }
     if (!rep.ok) {
@@ -50,11 +52,12 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
 
   // Choisit un modèle « flash » récent parmi ceux que la clé peut utiliser, plutôt que d'écrire un nom en dur.
   async function choisirModele(cle) {
+    const ecartes = (await DB.get('reglages', 'modelesEcartes'))?.valeur || [];
     const dejaChoisi = (await DB.get('reglages', 'modeleGemini'))?.valeur;
     if (dejaChoisi) return dejaChoisi;
     const { models = [] } = await appel('models?pageSize=200', cle);
     const utilisables = models.filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini-[\d.]+-flash/.test(m.name)
-      && !/lite|image|tts|live|audio|embedding|thinking|robotics|computer|exp|learnlm/.test(m.name));
+      && !ecartes.includes(m.name.replace(/^models\//, '')) && !/lite|image|tts|live|audio|embedding|thinking|robotics|computer|exp|learnlm/.test(m.name));
     const version = (m) => parseFloat(m.name.match(/gemini-([\d.]+)-flash/)[1]);
     const stable = (m) => !/preview|-\d{3}$|-\d{2}-\d{2}/.test(m.name);
     utilisables.sort((a, b) => (stable(b) - stable(a)) || (version(b) - version(a)));
@@ -67,7 +70,7 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     return nom;
   }
 
-  async function generer(cle, parts, tentative = 0, sansReflexion = false) {
+  async function generer(cle, parts, tentative = 0, sansReflexion = false, essai = false) {
     const modele = await choisirModele(cle);
     try {
       // Les modèles 2.5 « réfléchissent » longtemps par défaut : inutile pour lire une étiquette, on coupe.
@@ -81,9 +84,14 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
         body: JSON.stringify({ contents: [{ parts }], generationConfig: config }),
       });
     } catch (e) {
-      if (e.status === 400 && !sansReflexion) return generer(cle, parts, tentative, true);
+      if (e.status === 400 && !sansReflexion) return generer(cle, parts, tentative, true, essai);
       // Modèle retiré depuis le dernier choix : on en choisit un autre une seule fois.
-      if (e.status === 404 && !tentative) { await DB.del('reglages', 'modeleGemini'); return generer(cle, parts, 1, sansReflexion); }
+      if ((e.status === 404 || (e.delai && essai)) && tentative < 4) {
+        const ecartes = (await DB.get('reglages', 'modelesEcartes'))?.valeur || [];
+        await DB.put('reglages', { id: 'modelesEcartes', valeur: [...ecartes, modele] });
+        await DB.del('reglages', 'modeleGemini');
+        return generer(cle, parts, tentative + 1, false, essai);
+      }
       throw e;
     }
   }
@@ -142,7 +150,8 @@ Recopie fidèlement les noms propres avec leurs accents. N'invente jamais une in
     const debut = Date.now();
     try {
       await DB.del('reglages', 'modeleGemini');
-      const rep = await generer(cle, [{ text: 'Réponds par le mot OK.' }]);
+      await DB.del('reglages', 'modelesEcartes');
+      const rep = await generer(cle, [{ text: 'Réponds par le mot OK.' }], 0, false, true);
       const modele = (await DB.get('reglages', 'modeleGemini'))?.valeur;
       return { ok: !!rep.candidates?.length, modele, secondes: Math.round((Date.now() - debut) / 1000) };
     } catch (e) {

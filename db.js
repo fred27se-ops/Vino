@@ -4,7 +4,7 @@ const DB = (() => {
   const VERSION = 1;
   const STORES = ['vins', 'lots', 'mouvements', 'etageres', 'reglages'];
   // Réglages propres à ce téléphone : la clé Gemini ne doit jamais se retrouver dans un fichier de sauvegarde.
-  const LOCAUX = ['cleGemini', 'modeleGemini'];
+  const LOCAUX = ['cleGemini', 'modeleGemini', 'modelesEcartes'];
   let dbPromise = null;
 
   function open() {
